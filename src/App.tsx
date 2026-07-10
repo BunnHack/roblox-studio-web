@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AppWindow,
+  BadgeCheck,
   Box,
   Boxes,
   ChevronDown,
@@ -12,16 +13,21 @@ import {
   Copy,
   Cuboid,
   Eye,
+  ExternalLink,
   Folder,
   Gamepad2,
   Grid3X3,
+  Grid2X2,
   Hammer,
   Hand,
   Image,
   Layers3,
+  List,
   Lightbulb,
+  LoaderCircle,
   LocateFixed,
   Lock,
+  LogIn,
   Menu,
   MessageSquare,
   Minus,
@@ -37,10 +43,12 @@ import {
   Play,
   Plus,
   Redo2,
+  RefreshCw,
   Rotate3D,
   Save,
   Search,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Square,
@@ -51,7 +59,9 @@ import {
   TerminalSquare,
   Trash2,
   Undo2,
+  UserCircle2,
   Users,
+  WifiOff,
   Wrench,
   X,
   ZoomIn,
@@ -77,9 +87,42 @@ type ToolboxAsset = {
   creator: string
   category: Exclude<ToolboxCategory, 'All'>
   categoryName: string
-  color: string
-  glyph: string
+  color?: string
+  glyph?: string
+  thumbnail?: string | null
+  source?: 'roblox' | 'demo'
   verified?: boolean
+}
+
+type RobloxUser = {
+  id: number
+  name: string
+  displayName: string
+}
+
+type RobloxConnection = {
+  status: 'checking' | 'connected' | 'missing' | 'invalid' | 'offline'
+  user?: RobloxUser
+  message?: string
+}
+
+type ToolboxView = 'grid' | 'list'
+
+const toolboxCategoryApi: Record<ToolboxCategory, string> = {
+  All: 'FreeModels',
+  Models: 'FreeModels',
+  Decals: 'FreeDecals',
+  Meshes: 'FreeMeshes',
+  Audio: 'FreeAudio',
+  Plugins: 'WhitelistedPlugins',
+}
+
+const toolboxVisuals: Record<Exclude<ToolboxCategory, 'All'>, { color: string; glyph: string }> = {
+  Models: { color: '#5f7e9b', glyph: '◆' },
+  Decals: { color: '#9c6f64', glyph: '▧' },
+  Meshes: { color: '#647681', glyph: '⬡' },
+  Audio: { color: '#78679d', glyph: '♫' },
+  Plugins: { color: '#4f789f', glyph: '✦' },
 }
 
 const initialScene: SceneNode[] = [
@@ -363,7 +406,7 @@ function Viewport({
             style={{
               left: 85 + (index % 4) * 125,
               top: 85 + Math.floor(index / 4) * 105,
-              background: asset.color,
+              background: asset.color ?? toolboxVisuals[asset.category].color,
             }}
             title={asset.name}
             onClick={(event) => {
@@ -371,7 +414,7 @@ function Viewport({
               onSelect(`toolbox-${asset.id}`)
             }}
           >
-            <span>{asset.glyph}</span>
+            <span>{asset.glyph ?? toolboxVisuals[asset.category].glyph}</span>
           </button>
         ))}
       </div>
@@ -388,80 +431,224 @@ function Viewport({
 }
 
 function ToolboxPanel({
+  assets,
   search,
   category,
   installed,
+  isLoading,
+  error,
+  connected,
+  user,
+  view,
   onSearch,
   onCategory,
   onInsert,
+  onView,
+  onConnect,
+  onRefresh,
   onClose,
 }: {
+  assets: ToolboxAsset[]
   search: string
   category: ToolboxCategory
   installed: Set<string>
+  isLoading: boolean
+  error: string | null
+  connected: boolean
+  user?: RobloxUser
+  view: ToolboxView
   onSearch: (value: string) => void
   onCategory: (value: ToolboxCategory) => void
   onInsert: (asset: ToolboxAsset) => void
+  onView: (view: ToolboxView) => void
+  onConnect: () => void
+  onRefresh: () => void
   onClose: () => void
 }) {
-  const visibleAssets = toolboxAssets.filter((asset) => {
-    const matchesCategory = category === 'All' || asset.category === category
-    const query = search.trim().toLowerCase()
-    return matchesCategory && (!query || `${asset.name} ${asset.creator}`.toLowerCase().includes(query))
-  })
-
   return (
     <aside className="toolbox-panel" aria-label="Toolbox">
       <header className="toolbox-header">
-        <div><Gamepad2 size={16} /><strong>Toolbox</strong></div>
-        <IconButton icon={X} label="Close Toolbox" onClick={onClose} />
+        <div className="toolbox-title">
+          <span className="toolbox-logo"><Gamepad2 size={16} /></span>
+          <span><strong>Toolbox</strong><small>Creator Marketplace</small></span>
+        </div>
+        <div className="toolbox-header-actions">
+          <button className={`toolbox-session${connected ? ' connected' : ''}`} onClick={onConnect}>
+            {connected ? <UserCircle2 size={13} /> : <WifiOff size={13} />}
+            <span>{connected ? user?.displayName || user?.name : 'Local session'}</span>
+          </button>
+          <IconButton icon={X} label="Close Toolbox" onClick={onClose} />
+        </div>
       </header>
       <div className="toolbox-market-tabs">
         <button className="active">Marketplace</button>
-        <button>Inventory</button>
-        <button>Recent</button>
-        <button>My Creations</button>
+        <button title="Coming next">Inventory</button>
+        <button title="Coming next">Recent</button>
+        <button title="Coming next">Creations</button>
       </div>
-      <label className="toolbox-search">
-        <Search size={15} />
-        <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search Marketplace" autoFocus />
-        {search && <button onClick={() => onSearch('')} aria-label="Clear search"><X size={13} /></button>}
-      </label>
+      {!connected && (
+        <button className="toolbox-connect-banner" onClick={onConnect}>
+          <span className="connect-banner-icon"><LogIn size={17} /></span>
+          <span><strong>Connect your local Roblox session</strong><small>Use live Marketplace assets instead of the preview library.</small></span>
+          <ChevronRight size={16} />
+        </button>
+      )}
+      <div className="toolbox-search-row">
+        <label className="toolbox-search">
+          <Search size={16} />
+          <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search models, decals, audio…" autoFocus />
+          {search && <button onClick={() => onSearch('')} aria-label="Clear search"><X size={14} /></button>}
+        </label>
+        <button className="toolbox-filter-button" title="Refresh assets" onClick={onRefresh} disabled={isLoading}>
+          <RefreshCw className={isLoading ? 'spin' : ''} size={15} />
+        </button>
+      </div>
       <div className="toolbox-categories">
         {(['All', 'Models', 'Decals', 'Meshes', 'Audio', 'Plugins'] as ToolboxCategory[]).map((item) => (
           <button key={item} className={category === item ? 'active' : ''} onClick={() => onCategory(item)}>{item}</button>
         ))}
       </div>
       <div className="toolbox-results-label">
-        <span>Creator Marketplace</span>
-        <button title="Filter assets"><SlidersHorizontal size={14} /></button>
+        <span><b>{assets.length}</b> {connected ? 'Roblox results' : 'Preview assets'}</span>
+        <div className="toolbox-view-switch" aria-label="Asset layout">
+          <button className={view === 'grid' ? 'active' : ''} onClick={() => onView('grid')} title="Grid view"><Grid2X2 size={13} /></button>
+          <button className={view === 'list' ? 'active' : ''} onClick={() => onView('list')} title="List view"><List size={14} /></button>
+        </div>
       </div>
-      <div className="toolbox-grid">
-        {visibleAssets.map((asset) => {
+      {error && (
+        <div className="toolbox-error">
+          <WifiOff size={15} />
+          <span>{error}</span>
+          <button onClick={onRefresh}>Retry</button>
+        </div>
+      )}
+      <div className={`toolbox-grid ${view}`}>
+        {isLoading && Array.from({ length: 6 }).map((_, index) => (
+          <div className="asset-card asset-skeleton" key={`skeleton-${index}`}><span /><i /><i /></div>
+        ))}
+        {!isLoading && assets.map((asset) => {
           const isInstalled = installed.has(asset.id)
+          const visual = toolboxVisuals[asset.category]
           return (
             <article className="asset-card" key={asset.id}>
-              <button className="asset-preview" style={{ background: `linear-gradient(145deg, ${asset.color}, #25272a)` }} onClick={() => onInsert(asset)}>
-                <span>{asset.glyph}</span>
+              <button
+                className="asset-preview"
+                style={{ background: `linear-gradient(145deg, ${asset.color ?? visual.color}, #202328)` }}
+                onClick={() => onInsert(asset)}
+                aria-label={`Insert ${asset.name}`}
+              >
+                {asset.thumbnail
+                  ? <img src={asset.thumbnail} alt="" loading="lazy" />
+                  : <span>{asset.glyph ?? visual.glyph}</span>}
                 <i>{asset.category}</i>
+                <span className={`asset-insert-icon${isInstalled ? ' installed' : ''}`}>{isInstalled ? '✓' : '+'}</span>
               </button>
               <div className="asset-info">
                 <strong title={asset.name}>{asset.name}</strong>
-                <span>{asset.verified ? '◉ ' : ''}{asset.creator}</span>
-                <small>Asset ID {asset.assetId}</small>
+                <span className="asset-creator">
+                  {asset.creator}
+                  {asset.verified && <BadgeCheck size={11} aria-label="Verified creator" />}
+                </span>
+                <small>ID {asset.assetId}</small>
                 <button className={isInstalled ? 'installed' : ''} onClick={() => onInsert(asset)}>
-                  {isInstalled ? '✓ Inserted' : '+ Insert'}
+                  {isInstalled ? 'Inserted' : 'Insert asset'}
                 </button>
               </div>
             </article>
           )
         })}
-        {!visibleAssets.length && (
-          <div className="toolbox-empty"><Package size={28} /><span>No assets found</span></div>
+        {!isLoading && !assets.length && (
+          <div className="toolbox-empty"><Package size={28} /><strong>No assets found</strong><span>Try another search or category.</span></div>
         )}
       </div>
-      <footer className="toolbox-footer">{visibleAssets.length} assets · Toolbox Service preview</footer>
+      <footer className="toolbox-footer">
+        <span className={connected ? 'live-dot' : 'preview-dot'} />
+        {connected ? 'Live through local Toolbox Service' : 'Preview library · connect for live results'}
+      </footer>
     </aside>
+  )
+}
+
+function ConnectionDialog({
+  connection,
+  loginOpened,
+  onOpenLogin,
+  onRetry,
+  onClose,
+}: {
+  connection: RobloxConnection
+  loginOpened: boolean
+  onOpenLogin: () => void
+  onRetry: () => void
+  onClose: () => void
+}) {
+  const connected = connection.status === 'connected'
+
+  return (
+    <div className="connection-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-title">
+        <header className="connection-header">
+          <div className="connection-brand"><RobloxMark /><span>Roblox Studio Web</span></div>
+          <IconButton icon={X} label="Close connection guide" onClick={onClose} />
+        </header>
+
+        <div className="connection-hero">
+          <span className={`connection-hero-icon${connected ? ' success' : ''}`}>
+            {connected ? <BadgeCheck size={28} /> : <ShieldCheck size={28} />}
+          </span>
+          <div>
+            <p className="eyebrow">LOCAL CONNECTION</p>
+            <h2 id="connection-title">{connected ? `Connected as ${connection.user?.displayName}` : 'Connect Roblox on this device'}</h2>
+            <p>
+              {connected
+                ? `@${connection.user?.name} is available to the local Toolbox bridge.`
+                : 'Your session stays inside the local Node server. The browser UI never receives or stores the cookie.'}
+            </p>
+          </div>
+        </div>
+
+        {!connected && (
+          <div className="connection-steps">
+            <div className={loginOpened ? 'done' : ''}>
+              <span>1</span>
+              <div><strong>Sign in on Roblox</strong><small>Open the official login page in a separate tab.</small></div>
+              <button onClick={onOpenLogin}>Open login <ExternalLink size={13} /></button>
+            </div>
+            <div>
+              <span>2</span>
+              <div>
+                <strong>Configure the local bridge</strong>
+                <small>Put your own value in <code>.env.local</code>; do not paste it into this page.</small>
+                <code className="env-example">ROBLOX_COOKIE=your_cookie_value</code>
+              </div>
+            </div>
+            <div>
+              <span>3</span>
+              <div><strong>Restart and verify</strong><small>Run <code>npm run local</code>, then check the session.</small></div>
+              <button onClick={onRetry} disabled={connection.status === 'checking'}>
+                {connection.status === 'checking' ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}
+                Check again
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className={`connection-status ${connection.status}`}>
+          {connection.status === 'checking' && <><LoaderCircle className="spin" size={15} /> Checking the local bridge…</>}
+          {connection.status === 'connected' && <><BadgeCheck size={15} /> Session verified. Live Marketplace access is ready.</>}
+          {connection.status === 'missing' && <><AppWindow size={15} /> No cookie is configured in the local server yet.</>}
+          {connection.status === 'invalid' && <><WifiOff size={15} /> Roblox rejected the configured session. Replace it and restart.</>}
+          {connection.status === 'offline' && <><WifiOff size={15} /> {connection.message || 'The local server is not reachable.'}</>}
+        </div>
+
+        <footer className="connection-footer">
+          <span><Lock size={13} /> Read-only, loopback-only bridge</span>
+          <button className="connection-primary" onClick={connected ? onClose : onRetry} disabled={connection.status === 'checking'}>
+            {connected ? 'Continue to Studio' : 'Verify connection'}
+          </button>
+        </footer>
+      </section>
+    </div>
   )
 }
 
@@ -481,10 +668,128 @@ function App() {
   const [toolboxSearch, setToolboxSearch] = useState('')
   const [toolboxCategory, setToolboxCategory] = useState<ToolboxCategory>('All')
   const [installedAssets, setInstalledAssets] = useState(new Set<string>())
+  const [insertedAssetRecords, setInsertedAssetRecords] = useState<ToolboxAsset[]>([])
   const [lastInserted, setLastInserted] = useState<string | null>(null)
+  const [toolboxView, setToolboxView] = useState<ToolboxView>('grid')
+  const [remoteAssets, setRemoteAssets] = useState<ToolboxAsset[]>([])
+  const [toolboxLoading, setToolboxLoading] = useState(false)
+  const [toolboxError, setToolboxError] = useState<string | null>(null)
+  const [toolboxRefresh, setToolboxRefresh] = useState(0)
+  const [connection, setConnection] = useState<RobloxConnection>({ status: 'checking' })
+  const [loginOpened, setLoginOpened] = useState(false)
+  const [connectionDialogOpen, setConnectionDialogOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem('rbstudio:connection-guide') !== 'dismissed'
+    } catch {
+      return true
+    }
+  })
 
   const selectedName = findNodeName(sceneNodes, selected) ?? 'Workspace'
-  const insertedAssets = toolboxAssets.filter((asset) => installedAssets.has(asset.id))
+  const insertedAssets = insertedAssetRecords
+
+  const previewAssets = useMemo(() => {
+    const query = toolboxSearch.trim().toLowerCase()
+    return toolboxAssets.filter((asset) => {
+      const matchesCategory = toolboxCategory === 'All' || asset.category === toolboxCategory
+      return matchesCategory && (!query || `${asset.name} ${asset.creator}`.toLowerCase().includes(query))
+    })
+  }, [toolboxCategory, toolboxSearch])
+
+  const visibleToolboxAssets = connection.status === 'connected' ? remoteAssets : previewAssets
+
+  const checkRobloxSession = useCallback(async () => {
+    setConnection({ status: 'checking' })
+    try {
+      const response = await fetch('/api/roblox/session', { cache: 'no-store' })
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        throw new Error('Start the app with npm run local to enable Roblox access.')
+      }
+      const body = await response.json()
+      if (response.ok && body.ok && body.user) {
+        setConnection({ status: 'connected', user: body.user })
+        try { window.localStorage.setItem('rbstudio:connection-guide', 'dismissed') } catch { /* storage may be disabled */ }
+        return
+      }
+      if (body.code === 'missing_cookie') {
+        setConnection({ status: 'missing', message: body.message })
+      } else if (body.code === 'invalid_cookie') {
+        setConnection({ status: 'invalid', message: body.message })
+      } else {
+        setConnection({ status: 'offline', message: body.message || 'Unable to verify the local Roblox session.' })
+      }
+    } catch (error) {
+      setConnection({
+        status: 'offline',
+        message: error instanceof Error ? error.message : 'The local server is not reachable.',
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    void checkRobloxSession()
+  }, [checkRobloxSession])
+
+  useEffect(() => {
+    if (!toolboxOpen || connection.status !== 'connected') {
+      setToolboxLoading(false)
+      setToolboxError(null)
+      return
+    }
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setToolboxLoading(true)
+      setToolboxError(null)
+      const params = new URLSearchParams({
+        category: toolboxCategoryApi[toolboxCategory],
+        limit: '30',
+      })
+      if (toolboxSearch.trim()) params.set('keyword', toolboxSearch.trim())
+
+      try {
+        const response = await fetch(`/api/roblox/toolbox?${params}`, { signal: controller.signal, cache: 'no-store' })
+        const body = await response.json()
+        if (!response.ok || !body.ok) throw new Error(body.message || 'Unable to load Creator Marketplace assets.')
+
+        const categories: ToolboxCategory[] = ['Models', 'Decals', 'Meshes', 'Audio', 'Plugins']
+        const assets = (Array.isArray(body.items) ? body.items : []).map((asset: Partial<ToolboxAsset>) => {
+          const fallbackCategory = toolboxCategory === 'All' ? 'Models' : toolboxCategory
+          const assetCategory = categories.includes(asset.category as ToolboxCategory)
+            ? asset.category as Exclude<ToolboxCategory, 'All'>
+            : fallbackCategory as Exclude<ToolboxCategory, 'All'>
+          const visual = toolboxVisuals[assetCategory]
+          return {
+            id: String(asset.id || `roblox-${asset.assetId}`),
+            assetId: Number(asset.assetId),
+            assetTypeId: Number(asset.assetTypeId || 10),
+            name: String(asset.name || `Roblox asset ${asset.assetId}`),
+            creator: String(asset.creator || 'Roblox Creator'),
+            category: assetCategory,
+            categoryName: toolboxCategoryApi[assetCategory],
+            color: visual.color,
+            glyph: visual.glyph,
+            thumbnail: asset.thumbnail || null,
+            verified: Boolean(asset.verified),
+            source: 'roblox' as const,
+          }
+        }).filter((asset: ToolboxAsset) => Number.isFinite(asset.assetId))
+        setRemoteAssets(assets)
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setRemoteAssets([])
+        setToolboxError(error instanceof Error ? error.message : 'Unable to load Creator Marketplace assets.')
+      } finally {
+        if (!controller.signal.aborted) setToolboxLoading(false)
+      }
+    }, 320)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [connection.status, toolboxCategory, toolboxOpen, toolboxRefresh, toolboxSearch])
 
   const filteredScene = useMemo(() => {
     if (!explorerSearch.trim()) return sceneNodes
@@ -509,10 +814,21 @@ function App() {
 
   const handlePlay = () => setPlayState((state) => (state === 'playing' ? 'paused' : 'playing'))
 
+  const openRobloxLogin = () => {
+    setLoginOpened(true)
+    window.open('https://www.roblox.com/login', '_blank', 'noopener,noreferrer')
+  }
+
+  const closeConnectionDialog = () => {
+    setConnectionDialogOpen(false)
+    try { window.localStorage.setItem('rbstudio:connection-guide', 'dismissed') } catch { /* storage may be disabled */ }
+  }
+
   const insertAsset = (asset: ToolboxAsset) => {
     const nodeId = `toolbox-${asset.id}`
     if (!installedAssets.has(asset.id)) {
       setInstalledAssets((current) => new Set(current).add(asset.id))
+      setInsertedAssetRecords((current) => [...current, asset])
       setSceneNodes((current) => current.map((node) =>
         node.id === 'workspace'
           ? { ...node, children: [...(node.children ?? []), { id: nodeId, name: asset.name, kind: 'model' }] }
@@ -538,6 +854,18 @@ function App() {
         </div>
         <div className="title-actions">
           <span className="save-state"><Cloud size={13} /> Saved</span>
+          <button
+            className={`roblox-session-button ${connection.status}`}
+            onClick={() => setConnectionDialogOpen(true)}
+            title="Local Roblox connection"
+          >
+            {connection.status === 'checking'
+              ? <LoaderCircle className="spin" size={13} />
+              : connection.status === 'connected'
+                ? <BadgeCheck size={13} />
+                : <WifiOff size={13} />}
+            <span>{connection.status === 'connected' ? connection.user?.displayName : 'Connect Roblox'}</span>
+          </button>
           <button className="share-button"><Users size={14} /> Share</button>
           <IconButton icon={theme === 'dark' ? Sun : Moon} label="Toggle theme" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
           <IconButton icon={Minus} label="Minimize" />
@@ -607,12 +935,21 @@ function App() {
 
         {toolboxOpen && (
           <ToolboxPanel
+            assets={visibleToolboxAssets}
             search={toolboxSearch}
             category={toolboxCategory}
             installed={installedAssets}
+            isLoading={toolboxLoading}
+            error={toolboxError}
+            connected={connection.status === 'connected'}
+            user={connection.user}
+            view={toolboxView}
             onSearch={setToolboxSearch}
             onCategory={setToolboxCategory}
             onInsert={insertAsset}
+            onView={setToolboxView}
+            onConnect={() => setConnectionDialogOpen(true)}
+            onRefresh={() => setToolboxRefresh((value) => value + 1)}
             onClose={() => setToolboxOpen(false)}
           />
         )}
@@ -680,9 +1017,23 @@ function App() {
           <span>{playState === 'editing' ? 'Ready' : playState === 'playing' ? 'Simulation running' : 'Simulation paused'}</span>
         </div>
         <div className="status-right">
+          <span className={`status-session ${connection.status}`}>
+            {connection.status === 'connected' ? <BadgeCheck size={12} /> : <WifiOff size={12} />}
+            {connection.status === 'connected' ? 'Roblox connected' : 'Local preview'}
+          </span>
           <span>Grid 1 stud</span><span>Rotation 45°</span><span><Users size={12} /> 1</span><CircleHelp size={14} />
         </div>
       </footer>
+
+      {connectionDialogOpen && (
+        <ConnectionDialog
+          connection={connection}
+          loginOpened={loginOpened}
+          onOpenLogin={openRobloxLogin}
+          onRetry={checkRobloxSession}
+          onClose={closeConnectionDialog}
+        />
+      )}
     </div>
   )
 }
