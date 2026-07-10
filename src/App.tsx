@@ -475,7 +475,7 @@ function ToolboxPanel({
         <div className="toolbox-header-actions">
           <button className={`toolbox-session${connected ? ' connected' : ''}`} onClick={onConnect}>
             {connected ? <UserCircle2 size={13} /> : <WifiOff size={13} />}
-            <span>{connected ? user?.displayName || user?.name : 'Local session'}</span>
+            <span>{connected ? user?.displayName || user?.name : 'Server session'}</span>
           </button>
           <IconButton icon={X} label="Close Toolbox" onClick={onClose} />
         </div>
@@ -489,7 +489,7 @@ function ToolboxPanel({
       {!connected && (
         <button className="toolbox-connect-banner" onClick={onConnect}>
           <span className="connect-banner-icon"><LogIn size={17} /></span>
-          <span><strong>Connect your local Roblox session</strong><small>Use live Marketplace assets instead of the preview library.</small></span>
+          <span><strong>Connect the server-side Roblox session</strong><small>Use live Marketplace assets instead of the preview library.</small></span>
           <ChevronRight size={16} />
         </button>
       )}
@@ -563,7 +563,7 @@ function ToolboxPanel({
       </div>
       <footer className="toolbox-footer">
         <span className={connected ? 'live-dot' : 'preview-dot'} />
-        {connected ? 'Live through local Toolbox Service' : 'Preview library · connect for live results'}
+        {connected ? 'Live through the secure Toolbox bridge' : 'Preview library · connect for live results'}
       </footer>
     </aside>
   )
@@ -597,12 +597,12 @@ function ConnectionDialog({
             {connected ? <BadgeCheck size={28} /> : <ShieldCheck size={28} />}
           </span>
           <div>
-            <p className="eyebrow">LOCAL CONNECTION</p>
-            <h2 id="connection-title">{connected ? `Connected as ${connection.user?.displayName}` : 'Connect Roblox on this device'}</h2>
+            <p className="eyebrow">SERVER CONNECTION</p>
+            <h2 id="connection-title">{connected ? `Connected as ${connection.user?.displayName}` : 'Connect the Roblox service'}</h2>
             <p>
               {connected
-                ? `@${connection.user?.name} is available to the local Toolbox bridge.`
-                : 'Your session stays inside the local Node server. The browser UI never receives or stores the cookie.'}
+                ? `@${connection.user?.name} is available to the server-side Toolbox bridge.`
+                : 'Your session stays in the server environment. The browser UI never receives or stores the cookie.'}
             </p>
           </div>
         </div>
@@ -617,14 +617,14 @@ function ConnectionDialog({
             <div>
               <span>2</span>
               <div>
-                <strong>Configure the local bridge</strong>
-                <small>Put your own value in <code>.env.local</code>; do not paste it into this page.</small>
+                <strong>Configure the server bridge</strong>
+                <small>Set this value in Netlify Environment variables, or in <code>.env.local</code> when running locally.</small>
                 <code className="env-example">ROBLOX_COOKIE=your_cookie_value</code>
               </div>
             </div>
             <div>
               <span>3</span>
-              <div><strong>Restart and verify</strong><small>Run <code>npm run local</code>, then check the session.</small></div>
+              <div><strong>Deploy or restart, then verify</strong><small>Redeploy Netlify, or run <code>npm run local</code> for local development.</small></div>
               <button onClick={onRetry} disabled={connection.status === 'checking'}>
                 {connection.status === 'checking' ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}
                 Check again
@@ -634,15 +634,15 @@ function ConnectionDialog({
         )}
 
         <div className={`connection-status ${connection.status}`}>
-          {connection.status === 'checking' && <><LoaderCircle className="spin" size={15} /> Checking the local bridge…</>}
+          {connection.status === 'checking' && <><LoaderCircle className="spin" size={15} /> Checking the server bridge…</>}
           {connection.status === 'connected' && <><BadgeCheck size={15} /> Session verified. Live Marketplace access is ready.</>}
-          {connection.status === 'missing' && <><AppWindow size={15} /> No cookie is configured in the local server yet.</>}
-          {connection.status === 'invalid' && <><WifiOff size={15} /> Roblox rejected the configured session. Replace it and restart.</>}
-          {connection.status === 'offline' && <><WifiOff size={15} /> {connection.message || 'The local server is not reachable.'}</>}
+          {connection.status === 'missing' && <><AppWindow size={15} /> No cookie is configured in the server environment yet.</>}
+          {connection.status === 'invalid' && <><WifiOff size={15} /> Roblox rejected the configured session. Replace it and redeploy or restart.</>}
+          {connection.status === 'offline' && <><WifiOff size={15} /> {connection.message || 'The server bridge is not reachable.'}</>}
         </div>
 
         <footer className="connection-footer">
-          <span><Lock size={13} /> Read-only, loopback-only bridge</span>
+          <span><Lock size={13} /> Read-only, server-side bridge</span>
           <button className="connection-primary" onClick={connected ? onClose : onRetry} disabled={connection.status === 'checking'}>
             {connected ? 'Continue to Studio' : 'Verify connection'}
           </button>
@@ -704,7 +704,7 @@ function App() {
       const response = await fetch('/api/roblox/session', { cache: 'no-store' })
       const contentType = response.headers.get('content-type') || ''
       if (!contentType.includes('application/json')) {
-        throw new Error('Start the app with npm run local to enable Roblox access.')
+        throw new Error('The Roblox API route is unavailable. Deploy the Netlify Functions or run npm run local.')
       }
       const body = await response.json()
       if (response.ok && body.ok && body.user) {
@@ -717,12 +717,12 @@ function App() {
       } else if (body.code === 'invalid_cookie') {
         setConnection({ status: 'invalid', message: body.message })
       } else {
-        setConnection({ status: 'offline', message: body.message || 'Unable to verify the local Roblox session.' })
+        setConnection({ status: 'offline', message: body.message || 'Unable to verify the server-side Roblox session.' })
       }
     } catch (error) {
       setConnection({
         status: 'offline',
-        message: error instanceof Error ? error.message : 'The local server is not reachable.',
+        message: error instanceof Error ? error.message : 'The server bridge is not reachable.',
       })
     }
   }, [])

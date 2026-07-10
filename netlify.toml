@@ -5,6 +5,22 @@
 [build.environment]
   NODE_VERSION = "24"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/roblox/session"
+  to = "/.netlify/functions/roblox-session"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/roblox/toolbox"
+  to = "/.netlify/functions/roblox-toolbox"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
