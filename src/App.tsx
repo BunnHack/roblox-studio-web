@@ -60,6 +60,7 @@ import type { LucideIcon } from 'lucide-react'
 
 type Tool = 'Select' | 'Move' | 'Scale' | 'Rotate'
 type PlayState = 'editing' | 'playing' | 'paused'
+type ToolboxCategory = 'All' | 'Models' | 'Decals' | 'Meshes' | 'Audio' | 'Plugins'
 
 type SceneNode = {
   id: string
@@ -68,7 +69,20 @@ type SceneNode = {
   children?: SceneNode[]
 }
 
-const scene: SceneNode[] = [
+type ToolboxAsset = {
+  id: string
+  assetId: number
+  assetTypeId: number
+  name: string
+  creator: string
+  category: Exclude<ToolboxCategory, 'All'>
+  categoryName: string
+  color: string
+  glyph: string
+  verified?: boolean
+}
+
+const initialScene: SceneNode[] = [
   {
     id: 'workspace',
     name: 'Workspace',
@@ -101,14 +115,26 @@ const scene: SceneNode[] = [
   { id: 'sound', name: 'SoundService', kind: 'service' },
 ]
 
-const objectNames = new Map<string, string>()
-const indexNodes = (nodes: SceneNode[]) => {
-  nodes.forEach((node) => {
-    objectNames.set(node.id, node.name)
-    if (node.children) indexNodes(node.children)
-  })
+const toolboxAssets: ToolboxAsset[] = [
+  { id: 'city-house', assetId: 5657301130, assetTypeId: 10, name: 'Modern City House', creator: 'Studio Essentials', category: 'Models', categoryName: 'FreeModels', color: '#7b94ad', glyph: '🏠', verified: true },
+  { id: 'pine-tree', assetId: 5657301131, assetTypeId: 10, name: 'Low Poly Pine Tree', creator: 'BlockWorks', category: 'Models', categoryName: 'FreeModels', color: '#4f8b61', glyph: '🌲' },
+  { id: 'sports-car', assetId: 5657301132, assetTypeId: 10, name: 'Sports Car', creator: 'Velocity Motors', category: 'Models', categoryName: 'FreeModels', color: '#b04c4c', glyph: '🏎️', verified: true },
+  { id: 'street-lamp', assetId: 5657301133, assetTypeId: 40, name: 'Classic Street Lamp', creator: 'Urban Kit', category: 'Meshes', categoryName: 'FreeMeshes', color: '#86744c', glyph: '💡' },
+  { id: 'treasure', assetId: 5657301134, assetTypeId: 10, name: 'Treasure Chest', creator: 'Adventure Pack', category: 'Models', categoryName: 'FreeModels', color: '#9a6a3e', glyph: '🧰' },
+  { id: 'sky', assetId: 5657301135, assetTypeId: 13, name: 'Golden Hour Sky', creator: 'Atmos Studio', category: 'Decals', categoryName: 'FreeDecals', color: '#b97963', glyph: '🌅', verified: true },
+  { id: 'rocks', assetId: 5657301136, assetTypeId: 40, name: 'Stylized Rock Set', creator: 'Nature Forge', category: 'Meshes', categoryName: 'FreeMeshes', color: '#777d85', glyph: '🪨' },
+  { id: 'spawn', assetId: 5657301137, assetTypeId: 10, name: 'Team Spawn Pad', creator: 'Studio Essentials', category: 'Models', categoryName: 'FreeModels', color: '#4d8fa8', glyph: '✨', verified: true },
+  { id: 'adventure-audio', assetId: 5657301138, assetTypeId: 3, name: 'Adventure Theme', creator: 'Roblox Audio', category: 'Audio', categoryName: 'FreeAudio', color: '#6c579b', glyph: '🎵', verified: true },
+  { id: 'terrain-tools', assetId: 5657301139, assetTypeId: 38, name: 'Terrain Tools', creator: 'Creator Utilities', category: 'Plugins', categoryName: 'WhitelistedPlugins', color: '#4779a8', glyph: '🧩', verified: true },
+]
+
+const findNodeName = (nodes: SceneNode[], id: string): string | undefined => {
+  for (const node of nodes) {
+    if (node.id === id) return node.name
+    const childName = node.children ? findNodeName(node.children, id) : undefined
+    if (childName) return childName
+  }
 }
-indexNodes(scene)
 
 function RobloxMark() {
   return <span className="roblox-mark" aria-label="Roblox Studio" />
@@ -239,8 +265,7 @@ const propertyRows = [
   ['Parent', 'Workspace'],
 ]
 
-function Properties({ selected }: { selected: string }) {
-  const displayName = objectNames.get(selected) ?? 'Baseplate'
+function Properties({ selected, displayName }: { selected: string; displayName: string }) {
   const isPart = ['baseplate', 'spawn', 'platform'].includes(selected)
   return (
     <div className="properties-content">
@@ -290,7 +315,17 @@ function Properties({ selected }: { selected: string }) {
   )
 }
 
-function Viewport({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+function Viewport({
+  selected,
+  selectedName,
+  insertedAssets,
+  onSelect,
+}: {
+  selected: string
+  selectedName: string
+  insertedAssets: ToolboxAsset[]
+  onSelect: (id: string) => void
+}) {
   return (
     <main className="viewport" onClick={() => onSelect('workspace')}>
       <div className="viewport-tools">
@@ -321,6 +356,24 @@ function Viewport({ selected, onSelect }: { selected: string; onSelect: (id: str
           <div className="part-face part-top spawn-symbol"><Sparkles size={20} /></div>
           {selected === 'spawn' && <div className="selection-outline part-selection" />}
         </div>
+        {insertedAssets.map((asset, index) => (
+          <button
+            key={asset.id}
+            className={`toolbox-scene-object${selected === `toolbox-${asset.id}` ? ' selected' : ''}`}
+            style={{
+              left: 85 + (index % 4) * 125,
+              top: 85 + Math.floor(index / 4) * 105,
+              background: asset.color,
+            }}
+            title={asset.name}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSelect(`toolbox-${asset.id}`)
+            }}
+          >
+            <span>{asset.glyph}</span>
+          </button>
+        ))}
       </div>
 
       <div className="axis-gizmo" aria-label="World axes">
@@ -329,12 +382,91 @@ function Viewport({ selected, onSelect }: { selected: string; onSelect: (id: str
         <span className="axis z">Z</span>
         <span className="axis-origin" />
       </div>
-      <div className="viewport-hint"><MousePointer2 size={13} /> {objectNames.get(selected) ?? 'Workspace'}</div>
+      <div className="viewport-hint"><MousePointer2 size={13} /> {selectedName}</div>
     </main>
   )
 }
 
+function ToolboxPanel({
+  search,
+  category,
+  installed,
+  onSearch,
+  onCategory,
+  onInsert,
+  onClose,
+}: {
+  search: string
+  category: ToolboxCategory
+  installed: Set<string>
+  onSearch: (value: string) => void
+  onCategory: (value: ToolboxCategory) => void
+  onInsert: (asset: ToolboxAsset) => void
+  onClose: () => void
+}) {
+  const visibleAssets = toolboxAssets.filter((asset) => {
+    const matchesCategory = category === 'All' || asset.category === category
+    const query = search.trim().toLowerCase()
+    return matchesCategory && (!query || `${asset.name} ${asset.creator}`.toLowerCase().includes(query))
+  })
+
+  return (
+    <aside className="toolbox-panel" aria-label="Toolbox">
+      <header className="toolbox-header">
+        <div><Gamepad2 size={16} /><strong>Toolbox</strong></div>
+        <IconButton icon={X} label="Close Toolbox" onClick={onClose} />
+      </header>
+      <div className="toolbox-market-tabs">
+        <button className="active">Marketplace</button>
+        <button>Inventory</button>
+        <button>Recent</button>
+        <button>My Creations</button>
+      </div>
+      <label className="toolbox-search">
+        <Search size={15} />
+        <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search Marketplace" autoFocus />
+        {search && <button onClick={() => onSearch('')} aria-label="Clear search"><X size={13} /></button>}
+      </label>
+      <div className="toolbox-categories">
+        {(['All', 'Models', 'Decals', 'Meshes', 'Audio', 'Plugins'] as ToolboxCategory[]).map((item) => (
+          <button key={item} className={category === item ? 'active' : ''} onClick={() => onCategory(item)}>{item}</button>
+        ))}
+      </div>
+      <div className="toolbox-results-label">
+        <span>Creator Marketplace</span>
+        <button title="Filter assets"><SlidersHorizontal size={14} /></button>
+      </div>
+      <div className="toolbox-grid">
+        {visibleAssets.map((asset) => {
+          const isInstalled = installed.has(asset.id)
+          return (
+            <article className="asset-card" key={asset.id}>
+              <button className="asset-preview" style={{ background: `linear-gradient(145deg, ${asset.color}, #25272a)` }} onClick={() => onInsert(asset)}>
+                <span>{asset.glyph}</span>
+                <i>{asset.category}</i>
+              </button>
+              <div className="asset-info">
+                <strong title={asset.name}>{asset.name}</strong>
+                <span>{asset.verified ? '◉ ' : ''}{asset.creator}</span>
+                <small>Asset ID {asset.assetId}</small>
+                <button className={isInstalled ? 'installed' : ''} onClick={() => onInsert(asset)}>
+                  {isInstalled ? '✓ Inserted' : '+ Insert'}
+                </button>
+              </div>
+            </article>
+          )
+        })}
+        {!visibleAssets.length && (
+          <div className="toolbox-empty"><Package size={28} /><span>No assets found</span></div>
+        )}
+      </div>
+      <footer className="toolbox-footer">{visibleAssets.length} assets · Toolbox Service preview</footer>
+    </aside>
+  )
+}
+
 function App() {
+  const [sceneNodes, setSceneNodes] = useState<SceneNode[]>(initialScene)
   const [activeTab, setActiveTab] = useState('Home')
   const [tool, setTool] = useState<Tool>('Select')
   const [playState, setPlayState] = useState<PlayState>('editing')
@@ -345,9 +477,17 @@ function App() {
   const [outputOpen, setOutputOpen] = useState(true)
   const [activeBottomTab, setActiveBottomTab] = useState('Output')
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [toolboxOpen, setToolboxOpen] = useState(false)
+  const [toolboxSearch, setToolboxSearch] = useState('')
+  const [toolboxCategory, setToolboxCategory] = useState<ToolboxCategory>('All')
+  const [installedAssets, setInstalledAssets] = useState(new Set<string>())
+  const [lastInserted, setLastInserted] = useState<string | null>(null)
+
+  const selectedName = findNodeName(sceneNodes, selected) ?? 'Workspace'
+  const insertedAssets = toolboxAssets.filter((asset) => installedAssets.has(asset.id))
 
   const filteredScene = useMemo(() => {
-    if (!explorerSearch.trim()) return scene
+    if (!explorerSearch.trim()) return sceneNodes
     const query = explorerSearch.toLowerCase()
     const filterNodes = (nodes: SceneNode[]): SceneNode[] =>
       nodes.flatMap((node) => {
@@ -356,8 +496,8 @@ function App() {
           ? [{ ...node, children }]
           : []
       })
-    return filterNodes(scene)
-  }, [explorerSearch])
+    return filterNodes(sceneNodes)
+  }, [explorerSearch, sceneNodes])
 
   const toggleExpanded = (id: string) => {
     setExpanded((current) => {
@@ -368,6 +508,21 @@ function App() {
   }
 
   const handlePlay = () => setPlayState((state) => (state === 'playing' ? 'paused' : 'playing'))
+
+  const insertAsset = (asset: ToolboxAsset) => {
+    const nodeId = `toolbox-${asset.id}`
+    if (!installedAssets.has(asset.id)) {
+      setInstalledAssets((current) => new Set(current).add(asset.id))
+      setSceneNodes((current) => current.map((node) =>
+        node.id === 'workspace'
+          ? { ...node, children: [...(node.children ?? []), { id: nodeId, name: asset.name, kind: 'model' }] }
+          : node
+      ))
+    }
+    setExpanded((current) => new Set(current).add('workspace'))
+    setSelected(nodeId)
+    setLastInserted(asset.name)
+  }
 
   return (
     <div className={`studio-app theme-${theme}`}>
@@ -432,7 +587,7 @@ function App() {
         </div>
 
         <div className="ribbon-group insert-group">
-          <RibbonTool icon={Gamepad2} label="Toolbox" />
+          <RibbonTool icon={Gamepad2} label="Toolbox" active={toolboxOpen} onClick={() => setToolboxOpen((value) => !value)} />
           <RibbonTool icon={Package} label="Asset Manager" />
           <RibbonTool icon={Hammer} label="Terrain" />
           <RibbonTool icon={Sparkles} label="Material" />
@@ -448,7 +603,19 @@ function App() {
       </section>
 
       <div className={`workspace-shell${rightDockOpen ? '' : ' dock-closed'}${outputOpen ? '' : ' output-closed'}`}>
-        <Viewport selected={selected} onSelect={setSelected} />
+        <Viewport selected={selected} selectedName={selectedName} insertedAssets={insertedAssets} onSelect={setSelected} />
+
+        {toolboxOpen && (
+          <ToolboxPanel
+            search={toolboxSearch}
+            category={toolboxCategory}
+            installed={installedAssets}
+            onSearch={setToolboxSearch}
+            onCategory={setToolboxCategory}
+            onInsert={insertAsset}
+            onClose={() => setToolboxOpen(false)}
+          />
+        )}
 
         {rightDockOpen && (
           <aside className="right-dock">
@@ -471,11 +638,11 @@ function App() {
 
             <section className="dock-panel properties-panel">
               <header className="panel-header">
-                <span>Properties <b>{objectNames.get(selected)}</b></span>
+                <span>Properties <b>{selectedName}</b></span>
                 <IconButton icon={SlidersHorizontal} label="Property options" />
               </header>
               <div className="panel-search"><Search size={14} /><input placeholder="Filter properties" /></div>
-              <Properties selected={selected} />
+              <Properties selected={selected} displayName={selectedName} />
             </section>
           </aside>
         )}
@@ -500,6 +667,7 @@ function App() {
               <div><span className="timestamp">09:41:06.112</span> Studio session started</div>
               <div><span className="timestamp">09:41:06.184</span> Auto-recovery file was created</div>
               {playState !== 'editing' && <div className="output-info"><span className="timestamp">09:42:11.027</span> Running game simulation</div>}
+              {lastInserted && <div className="output-info"><span className="timestamp">Toolbox</span> Inserted {lastInserted} into Workspace</div>}
               <span className="output-caret" />
             </div>
           </section>

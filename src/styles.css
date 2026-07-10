@@ -102,12 +102,59 @@ button { color: inherit; }
 .compact-group { border-right: 0; }
 
 .workspace-shell {
+  position: relative;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(270px, 25vw, 330px);
   grid-template-rows: minmax(0, 1fr) 142px;
   background: var(--surface-0);
 }
+
+.toolbox-panel {
+  position: absolute;
+  z-index: 16;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  width: min(330px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #4a4d52;
+  border-radius: 6px;
+  background: var(--surface-1);
+  box-shadow: 0 12px 36px rgba(0,0,0,.38);
+}
+.toolbox-header { height: 34px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 3px 0 10px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.toolbox-header > div { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.toolbox-market-tabs { height: 32px; display: flex; overflow-x: auto; border-bottom: 1px solid var(--border); padding: 0 7px; }
+.toolbox-market-tabs button { flex: 0 0 auto; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); padding: 0 8px; font-size: 10px; cursor: pointer; }
+.toolbox-market-tabs button:hover, .toolbox-market-tabs button.active { color: var(--text); }
+.toolbox-market-tabs button.active { border-bottom-color: var(--accent); }
+.toolbox-search { height: 31px; margin: 7px 8px 5px; flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 0 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-0); color: var(--text-muted); }
+.toolbox-search:focus-within { border-color: var(--accent); }
+.toolbox-search input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 11px; }
+.toolbox-search button, .toolbox-results-label button { border: 0; background: transparent; color: var(--text-muted); padding: 0; display: grid; place-items: center; cursor: pointer; }
+.toolbox-categories { display: flex; gap: 5px; padding: 1px 8px 7px; overflow-x: auto; }
+.toolbox-categories button { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text-muted); padding: 3px 9px; font-size: 10px; cursor: pointer; }
+.toolbox-categories button:hover, .toolbox-categories button.active { border-color: #4d7ebc; background: var(--accent-soft); color: var(--text); }
+.toolbox-results-label { height: 27px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 9px; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .45px; }
+.toolbox-grid { min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; padding: 8px; }
+.asset-card { min-width: 0; overflow: hidden; border: 1px solid var(--border-soft); border-radius: 5px; background: var(--surface-2); transition: border-color .15s, transform .15s; }
+.asset-card:hover { border-color: #5b7ca4; transform: translateY(-1px); }
+.asset-preview { position: relative; width: 100%; height: 78px; border: 0; display: grid; place-items: center; cursor: pointer; overflow: hidden; }
+.asset-preview > span { font-size: 36px; filter: drop-shadow(0 4px 5px rgba(0,0,0,.35)); transform: translateY(-2px); }
+.asset-preview i { position: absolute; right: 4px; bottom: 4px; padding: 2px 4px; border-radius: 3px; background: rgba(20,21,23,.7); color: #e5e7e9; font-size: 8px; font-style: normal; }
+.asset-info { display: flex; flex-direction: column; padding: 6px; min-width: 0; }
+.asset-info strong, .asset-info span, .asset-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asset-info strong { font-size: 10.5px; font-weight: 600; }
+.asset-info span { margin-top: 2px; color: var(--text-muted); font-size: 9px; }
+.asset-info small { margin-top: 2px; color: #7f858d; font-size: 8px; }
+.asset-info button { height: 22px; margin-top: 6px; border: 1px solid #4778b8; border-radius: 3px; background: #356cac; color: white; font-size: 9.5px; cursor: pointer; }
+.asset-info button:hover { background: #407bc2; }
+.asset-info button.installed { border-color: var(--border); background: var(--surface-3); color: #6bc58a; }
+.toolbox-empty { grid-column: 1 / -1; min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--text-muted); font-size: 11px; }
+.toolbox-footer { height: 24px; flex: 0 0 auto; display: flex; align-items: center; padding: 0 9px; border-top: 1px solid var(--border); color: var(--text-muted); background: var(--surface-2); font-size: 9.5px; }
 .workspace-shell.dock-closed { grid-template-columns: minmax(0, 1fr); }
 .workspace-shell.output-closed { grid-template-rows: minmax(0, 1fr); }
 
@@ -128,6 +175,9 @@ button { color: inherit; }
 .spawn-pad .part-right { width: 20px; right: -20px; }
 .spawn-pad .part-top { background: #6dba69; color: rgba(255,255,255,.8); }
 .part-selection { inset: -3px; transform: translateZ(2px); box-shadow: 0 0 0 1px white; }
+.toolbox-scene-object { position: absolute; width: 66px; height: 66px; transform: translateZ(34px); border: 2px solid rgba(255,255,255,.45); border-radius: 7px; box-shadow: 8px 10px 0 rgba(35,38,41,.45); display: grid; place-items: center; cursor: pointer; transform-style: preserve-3d; }
+.toolbox-scene-object span { font-size: 29px; transform: rotateZ(31deg) rotateX(-58deg); filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.toolbox-scene-object.selected { outline: 3px solid #3b8cff; outline-offset: 3px; }
 
 .viewport-tools { position: absolute; z-index: 5; left: 12px; top: 12px; display: flex; background: rgba(32,33,36,.92); border: 1px solid #4a4c50; border-radius: 5px; padding: 2px; }
 .viewport-tools .icon-button { color: #d8dadd; }
@@ -224,4 +274,5 @@ button { color: inherit; }
   .compact-group { display: none; }
   .workspace-shell { grid-template-columns: minmax(300px, 1fr) 240px; }
   .status-right span:nth-child(-n+2) { display: none; }
+  .toolbox-panel { width: 286px; }
 }
